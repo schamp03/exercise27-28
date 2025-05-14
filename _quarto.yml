@@ -1,7 +1,8 @@
 project:
+  type: website
   title: "exercise27-28"
   output-dir: docs
-  type: website
+
 format:
   html:
     self-contained: true
