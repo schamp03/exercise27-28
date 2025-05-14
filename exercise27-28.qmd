@@ -1,0 +1,121 @@
+---
+title: "Exercise27-28"
+format: html
+editor: visual
+author: Sierra Champion
+---
+
+# Load Packages
+
+```{r}
+library(tidyverse)
+library(tmap)
+library(terra)
+library(sf)
+library(osmdata)
+library(units)
+
+```
+
+# Define River
+```{r}
+fort_collins_bbox <- getbb("Fort Collins, Colorado")
+
+osm_data <- opq(bbox = fort_collins_bbox) %>%
+  add_osm_feature(key = "waterway") %>%
+  osmdata_sf()
+
+# Filter for Cache la Poudre River
+poudre <- osm_data$osm_lines %>%
+  filter(str_detect(name, "Cache la Poudre")) %>%
+  st_union() %>%
+  st_as_sf()
+
+```
+
+
+# Length
+```{r}
+river_length <- st_length(poudre)
+print(river_length)
+
+```
+
+# Convert to Points
+```{r}
+poudre_pts <- st_cast(poudre, "POINT")
+
+```
+
+
+# DEM objects
+```{r}
+library(terra)
+
+url <- '/vsicurl/https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/main/resources/foco-elev-cm.tif'
+
+dem <- rast(url)
+
+```
+
+
+# River profile
+```{r}
+elev_vals <- extract(dem, poudre_pts)
+
+# Bind elevation values to point geometry
+poudre_profile <- bind_cols(poudre_pts, elev_vals) %>%
+  mutate(ID = row_number())
+
+```
+
+# Straight line distance
+```{r}
+start_point <- st_geometry(poudre_pts)[1]
+end_point <- st_geometry(poudre_pts)[length(st_geometry(poudre_pts))]
+
+straight_dist <- st_distance(start_point, end_point)
+sinuosity <- as.numeric(river_length) / as.numeric(straight_dist)
+
+print(sinuosity)
+
+```
+
+# Slope
+```{r}
+
+valid_profile <- poudre_profile %>%
+  filter(!is.na(dem))
+
+elev_inlet <- valid_profile$dem[1]
+elev_outlet <- valid_profile$dem[nrow(valid_profile)]
+
+river_length_m <- as.numeric(st_length(poudre))  
+
+
+slope <- (elev_inlet - elev_outlet) / river_length_m
+
+slope
+
+```
+
+# Map
+```{r}
+ ggplot(poudre_profile, aes(x = ID, y = dem)) +
+  geom_line(color = "steelblue") +
+  labs(title = "Elevation Profile of the Cache la Poudre River",
+       x = "Point ID", y = "Elevation (cm)") +
+  theme_minimal()
+
+```
+
+# Map of river colored by elevation
+```{r}
+ggplot(poudre_profile) +
+  geom_sf(aes(color = dem)) +
+  scale_color_viridis_c(name = "Elevation (cm)") +
+  labs(title = "Cache la Poudre River Profile by Elevation") +
+  theme_minimal()
+
+```
+
